@@ -130,15 +130,15 @@ def get_log_data(log_group_name, start_time, end_time, ccuid = ""):
         if next_token == '':
             response = client.filter_log_events(
                 logGroupName=log_group_name,
-                startTime=start_time,
-                endTime=end_time,
+                # startTime=start_time,
+                # endTime=end_time,
                 filterPattern=filterStr
             )
         else:
             response = client.filter_log_events(
                 logGroupName=log_group_name,
-                startTime=start_time,
-                endTime=end_time,
+                # startTime=start_time,
+                # endTime=end_time,
                 filterPattern=filterStr,
                 nextToken=next_token
             )
@@ -158,12 +158,18 @@ def get_jp_dt(utc_dt_str):
     return ""
 
 def get_data1():
-    logger.info("get_data1")
+    # logger.info("get_data1")
     log_group = '/aws/lambda/ympc_iot_data_transfer_lambda'
-    utc_now = datetime.datetime.now() + datetime.timedelta(hours=-9)
-    start_dt = utc_now + datetime.timedelta(hours=-48)
+    # utc_now = datetime.datetime.now() + datetime.timedelta(hours=-9)
+    # start_dt = utc_now + datetime.timedelta(hours=-48)
+    # start_unix = int(start_dt.timestamp() * 1000)
+    # end_dt = datetime.datetime.now() + datetime.timedelta(hours=24)
+    # end_unix = int(end_dt.timestamp() * 1000)
+
+    now = datetime.datetime.now()
+    start_dt = now + datetime.timedelta(hours=-48)
     start_unix = int(start_dt.timestamp() * 1000)
-    end_dt = datetime.datetime.now() + datetime.timedelta(hours=24)
+    end_dt = now + datetime.timedelta(hours=24)
     end_unix = int(end_dt.timestamp() * 1000)
 
     data1 = []
@@ -198,6 +204,13 @@ def get_data1():
                     # logger.info(vehicleInfo)
                     for itm in vehicleInfo:
                         timestamp2 = get_jp_dt(get_item_value(itm, 'timestamp').replace(" UTC", "").replace("T", " "))
+
+                        if not isinstance(timestamp2, datetime.datetime):
+                            continue
+
+                        if timestamp2 < start_dt or timestamp2 > end_dt:
+                            continue
+
                         mode = str(get_item_value(itm, 'mode'))
                         odometer_total = str(get_item_value(itm, 'odometer-total'))
                         soc = str(get_item_value(itm, 'soc'))
@@ -257,10 +270,14 @@ def get_data1():
 
 # @st.cache_data
 def get_data2(ccuid, s_d, e_d):
-    logger.info("get_data2")
+    # logger.info("get_data2")
     log_group = '/aws/lambda/ympc_iot_data_transfer_lambda'
-    start_dt = datetime.datetime(s_d.year, s_d.month, s_d.day, 0, 0, 0) + datetime.timedelta(hours=-9)
-    end_dt = datetime.datetime(e_d.year, e_d.month, e_d.day, 23, 59, 59) + datetime.timedelta(hours=-9)
+    # start_dt = datetime.datetime(s_d.year, s_d.month, s_d.day, 0, 0, 0) + datetime.timedelta(hours=-9)
+    # end_dt = datetime.datetime(e_d.year, e_d.month, e_d.day, 23, 59, 59) + datetime.timedelta(hours=-9)
+    # logger.info(start_dt)
+    # logger.info(end_dt)
+    start_dt = datetime.datetime(s_d.year, s_d.month, s_d.day, 0, 0, 0)
+    end_dt = datetime.datetime(e_d.year, e_d.month, e_d.day, 23, 59, 59)
     start_unix = int(start_dt.timestamp() * 1000)
     end_unix = int(end_dt.timestamp() * 1000)
 
@@ -288,6 +305,11 @@ def get_data2(ccuid, s_d, e_d):
                     # logger.info(vehicleInfo)
                     for itm in vehicleInfo:
                         timestamp2 = get_jp_dt(get_item_value(itm, 'timestamp').replace(" UTC", "").replace("T", " "))
+                        if not isinstance(timestamp2, datetime.datetime):
+                            continue
+
+                        if timestamp2 < start_dt or timestamp2 > end_dt:
+                            continue
                         mode = str(get_item_value(itm, 'mode'))
                         odometer_total = str(get_item_value(itm, 'odometer-total'))
                         soc = str(get_item_value(itm, 'soc'))
@@ -370,8 +392,8 @@ def get_ccuid_by_carno(val):
 def main():
     if 'state' not in st.session_state:
         st.caption("⚠️AWSをアクセスするためにアカウントIDとシークレットキーを入力してください。")
-        accessKey = st.text_input(label="Access key ID")
-        secretKey = st.text_input(label="Secret access key", type='password')
+        accessKey = st.text_input(label="Access key ID", value="")
+        secretKey = st.text_input(label="Secret access key", type='password', value="")
         _, c1 = st.columns([9, 1])
         if c1.button(label='認証'):
             if accesskey_check(accessKey, secretKey):
@@ -432,7 +454,7 @@ def main():
             if 'second' in st.session_state:
 
                 if st.session_state['second'] > 0 and 'first' not in st.session_state:
-                    st.warning("⚠️定周期でデータ取得が実行中、しばらくお待ちください。")
+                    st.warning("⚠️「" + str(st.session_state['second']) + "」秒周期で検索処理が実行中、しばらくお待ちください。")
                     my_bar = st.progress(0)
 
                     for percent_complete in range(100):
@@ -449,6 +471,7 @@ def main():
                     my_bar.empty()
                     st.session_state.pop('first')
 
+                # with st.spinner('検索処理実行中、しばらくお待ちください。'):
                 df = pd.DataFrame(
                     data=get_data1(),
                     columns=(
